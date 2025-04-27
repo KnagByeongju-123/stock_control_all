@@ -1,0 +1,92 @@
+
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>영업관리팀 체크시트 종합</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 40px;
+      background-color: #f9f9f9;
+      margin: 0;
+    }
+    h1 {
+      margin-bottom: 30px;
+      font-size: 24px;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .link-card {
+      display: block;
+      background-color: #fff;
+      border: 1px solid #ddd;
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      transition: transform 0.2s;
+      width: 66.666%;
+      max-width: 600px;
+      box-sizing: border-box;
+      text-decoration: none;
+      color: inherit;
+    }
+    .link-card:hover {
+      transform: scale(1.02);
+    }
+    .link-card .title {
+      font-size: 20px;
+      font-weight: bold;
+      color: #007BFF;
+    }
+    .link-card.green .title {
+      color: #2e7d32;
+    }
+    .link-card .description {
+      margin-top: 5px;
+      font-size: 16px;
+      color: #555;
+    }
+    .no-link .title {
+      color: #555;
+    }
+    .no-link {
+      cursor: default;
+    }
+    @media (max-width: 600px) {
+      body {
+        padding: 20px;
+      }
+      .link-card {
+        width: 100% !important;
+        max-width: none;
+        padding: 15px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1> 재고이동 관리</h1>
+
+    <a href="https://script.google.com/macros/s/AKfycbxnE4efOv6EN5ZCoRGchhBrtcwSPOGiv9VRKAyti4KWS8yc200_InnSD0dyHj5Tl_9v/exec" target="_blank" class="link-card">
+      <div class="title">1. 레이스웨이 재고이동 관리</div>
+      <p class="description">태진~한성~동진 이동재고 관리</p>
+    </a>
+
+    <a href="여기에주소입력" target="_blank" class="link-card green">
+      <div class="title">2. SKF 씰 재고이동 관리</div>
+      <p class="description">태진~협력사 이동재고관리</p>
+    </a>
+
+   
+
+  </div>
+</body>
+</html>
