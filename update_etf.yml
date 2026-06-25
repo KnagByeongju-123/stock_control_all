@@ -1,0 +1,25 @@
+name: Update ETF
+
+on:
+  schedule:
+    - cron: "0 8 * * 1-5"      # 평일 17:00 KST 자동
+  workflow_dispatch:            # 수동 실행 버튼
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: pip install requests
+      - name: Run updater
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          KIS_APPKEY:           ${{ secrets.KIS_APPKEY }}
+          KIS_APPSECRET:        ${{ secrets.KIS_APPSECRET }}
+          KIS_REAL:             "true"
+        run: python etf_updater.py

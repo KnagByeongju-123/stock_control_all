@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ETF 스크리너 · 모니터링</title>
+<!-- v2.0.0 : 한투 데이터(etf_daily) 기반. 인앱 캔들+MACD 직접 계산 -->
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+  :root{--bg:#0f1115;--panel:#171a21;--line:#262b36;--text:#e6e9ef;--muted:#8b93a3;
+    --green:#3fb950;--red:#f85149;--gray:#6e7681;--accent:#58a6ff;--cand:#1f6feb;--sig:#f0a020;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;padding:16px;}
+  header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+  h1{font-size:18px;margin:0}
+  .ver{font-size:12px;color:var(--muted);font-weight:400}
+  .meta{color:var(--muted);font-size:12px}
+  button{background:var(--panel);color:var(--text);border:1px solid var(--line);
+    border-radius:8px;padding:7px 12px;cursor:pointer;font-size:13px}
+  button:hover{border-color:var(--accent)}
+  .controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:6px 0 10px}
+  .controls label{font-size:13px;cursor:pointer;user-select:none}
+  .pill{background:rgba(63,185,80,.15);color:var(--green);padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600}
+  .wrap{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px;min-width:780px}
+  th,td{padding:9px 11px;text-align:right;white-space:nowrap}
+  th{position:sticky;top:0;background:var(--panel);color:var(--muted);font-weight:600;
+    cursor:pointer;border-bottom:1px solid var(--line);user-select:none}
+  th:hover{color:var(--text)}
+  th.l,td.l{text-align:left}
+  tr+tr td{border-top:1px solid var(--line)}
+  tbody tr:hover{background:#1d212b}
+  tbody tr.cand{background:rgba(31,111,235,.10)}
+  tbody tr.cand td:first-child{box-shadow:inset 3px 0 0 var(--cand)}
+  tbody tr.sep td{border-top:2px solid var(--line)}
+  .name{font-weight:600}.tk{color:var(--muted);font-size:11px}
+  .cname{cursor:pointer;border-bottom:1px dotted var(--muted)}
+  .cname:hover{color:var(--accent);border-bottom-color:var(--accent)}
+  .badge{padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
+  .b-up{background:rgba(63,185,80,.15);color:var(--green)}
+  .b-dn{background:rgba(248,81,73,.15);color:var(--red)}
+  .b-mid{background:rgba(110,118,129,.18);color:var(--gray)}
+  .b-rank{background:rgba(31,111,235,.20);color:#79c0ff}
+  .pos{color:var(--green)}.neg{color:var(--red)}.mut{color:var(--muted)}
+  .chart{padding:4px 11px;font-size:12px;font-weight:600;border-radius:7px;
+    background:rgba(88,166,255,.12);color:var(--accent);border:1px solid rgba(88,166,255,.4)}
+  .chart:hover{background:rgba(88,166,255,.22)}
+  .empty{padding:30px;text-align:center;color:var(--muted)}
+  footer{margin-top:10px;color:var(--muted);font-size:11px;text-align:center}
+  .legend{color:var(--muted);font-size:12px;margin:4px 2px 0;line-height:1.7}
+  /* 차트 모달 */
+  #chartModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:100;
+    align-items:center;justify-content:center;padding:10px}
+  #chartModal.on{display:flex}
+  .chartBox{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
+  .chartHead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+  .chartHead .t{font-weight:700;font-size:15px;margin-right:auto}
+  .lab{font-size:11px;color:var(--muted);margin:2px 2px 6px}
+  .lab b.m{color:var(--accent)} .lab b.s{color:var(--sig)}
+  .nv{font-size:12px;color:var(--accent);text-decoration:none;border:1px solid rgba(88,166,255,.4);
+    padding:4px 10px;border-radius:7px}
+  .xclose{padding:4px 12px}
+  #candle{width:min(960px,92vw);height:54vh;max-height:430px}
+  #macd{width:min(960px,92vw);height:22vh;max-height:180px;margin-top:6px}
+  .chartErr{color:var(--muted);font-size:13px;margin-top:8px;text-align:center;max-width:min(960px,92vw)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ETF 스크리너 <span class="ver">모니터링 v2.0.0</span></h1>
+  <button onclick="loadData()">새로고침</button>
+  <span class="meta" id="updated"></span>
+</header>
+
+<div class="controls">
+  <label><input type="checkbox" id="onlyCand" onchange="render()"> 매수 후보만 보기</label>
+  <span class="pill" id="candCount">매수후보 0개</span>
+</div>
+
+<div class="legend">
+  <b style="color:#79c0ff">★ 매수후보</b> 맨 위 고정(정배열 + MA20 −3~+2% + RSI 40~55) ·
+  <b>종목명 클릭</b> 또는 <b style="color:var(--accent)">차트</b> → 캔들 + MACD(앱에서 직접 계산) · 데이터: 한투 일봉(250일)
+</div>
+
+<div class="wrap">
+  <table>
+    <thead>
+      <tr>
+        <th class="l" onclick="sortBy('name')">종목</th>
+        <th onclick="sortBy('price')">현재가</th>
+        <th onclick="sortBy('hi52_pct')">고점대비</th>
+        <th onclick="sortBy('ma20_pct')">MA20</th>
+        <th onclick="sortBy('ma60_pct')">MA60</th>
+        <th class="l" onclick="sortBy('trend')">추세</th>
+        <th onclick="sortBy('rsi14')">RSI</th>
+        <th class="l">신호</th>
+        <th class="l">차트</th>
+      </tr>
+    </thead>
+    <tbody id="rows"><tr><td class="empty" colspan="9">불러오는 중…</td></tr></tbody>
+  </table>
+</div>
+
+<!-- 차트 모달 (lightweight-charts: 캔들 + MACD) -->
+<div id="chartModal" onclick="if(event.target===this)closeChart()">
+  <div class="chartBox">
+    <div class="chartHead">
+      <span class="t" id="chartTitle"></span>
+      <a class="nv" id="chartNaver" href="#" target="_blank" rel="noopener">네이버↗</a>
+      <button class="xclose" onclick="closeChart()">✕</button>
+    </div>
+    <div id="candle"></div>
+    <div class="lab">MACD(12,26,9) · <b class="m">─ MACD</b> <b class="s">─ Signal</b> · 막대=히스토그램</div>
+    <div id="macd"></div>
+    <div class="chartErr" id="chartErr" style="display:none"></div>
+  </div>
+</div>
+
+<footer>v2.0.0 · 데이터 한투 일봉(250일) → Supabase · 인앱 캔들+MACD</footer>
+
+<script>
+// ── 설정 ────────────────────────────────────────────────
+const SUPABASE_URL  = "https://jgvikmakenpllwxwdugk.supabase.co";
+const SUPABASE_ANON = "sb_publishable_sKp-6nz2PQ9LxQ5pF-nYkg_YwoEJN6S";
+const CAND = { trend:"정배열↑", ma20Min:-3, ma20Max:2, rsiMin:40, rsiMax:55 };
+// ────────────────────────────────────────────────────────
+
+let DATA = [];
+let sortKey = "hi52_pct", sortAsc = true;
+let candleChart=null, macdChart=null;
+
+// ── 차트 (한투 일봉 → 캔들 + MACD) ──────────────────────
+function ema(arr,p){ const k=2/(p+1); let prev; return arr.map((v,i)=>{ prev=i===0?v:v*k+prev*(1-k); return prev; }); }
+
+window.openChart = async function(code,name){
+  document.getElementById('chartTitle').textContent = `${name} (${code})`;
+  document.getElementById('chartNaver').href = `https://finance.naver.com/item/main.naver?code=${code}`;
+  const err=document.getElementById('chartErr'); err.style.display='none';
+  if(candleChart){candleChart.remove();candleChart=null;}
+  if(macdChart){macdChart.remove();macdChart=null;}
+  document.getElementById('candle').innerHTML='';
+  document.getElementById('macd').innerHTML='';
+  document.getElementById('chartModal').classList.add('on');
+  if(typeof LightweightCharts==='undefined'){ err.textContent='차트 모듈을 불러오지 못했습니다(인터넷 확인). 네이버↗로 보세요.'; err.style.display='block'; return; }
+  let rows;
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/etf_daily?ticker=eq.${code}&select=date,open,high,low,close&order=date.asc&_=${Date.now()}`,
+      { cache:'no-store', headers:{ apikey:SUPABASE_ANON, Authorization:`Bearer ${SUPABASE_ANON}` } });
+    rows=await res.json();
+  }catch(e){ err.textContent='데이터 조회 실패: '+e.message; err.style.display='block'; return; }
+  if(!Array.isArray(rows)||rows.length<2){ err.textContent='이 종목의 일봉 데이터가 아직 없습니다(업데이터 실행 필요). 네이버↗로 확인하세요.'; err.style.display='block'; return; }
+  drawCharts(rows);
+};
+window.closeChart = function(){
+  document.getElementById('chartModal').classList.remove('on');
+  if(candleChart){candleChart.remove();candleChart=null;}
+  if(macdChart){macdChart.remove();macdChart=null;}
+};
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeChart(); });
+
+function drawCharts(rows){
+  const candles = rows.map(r=>({time:r.date, open:+r.open, high:+r.high, low:+r.low, close:+r.close}));
+  const closes = candles.map(c=>c.close);
+  const e12=ema(closes,12), e26=ema(closes,26);
+  const macd=closes.map((_,i)=>e12[i]-e26[i]);
+  const sig=ema(macd,9);
+  const t=candles.map(c=>c.time);
+  const macdData=t.map((x,i)=>({time:x,value:+macd[i].toFixed(3)}));
+  const sigData =t.map((x,i)=>({time:x,value:+sig[i].toFixed(3)}));
+  const hist=t.map((x,i)=>{const v=macd[i]-sig[i];return{time:x,value:+v.toFixed(3),color:v>=0?'rgba(63,185,80,.6)':'rgba(248,81,73,.6)'};});
+
+  const dark={ layout:{background:{color:'#171a21'},textColor:'#e6e9ef'},
+    grid:{vertLines:{color:'#1f2530'},horzLines:{color:'#1f2530'}},
+    rightPriceScale:{borderColor:'#262b36'}, timeScale:{borderColor:'#262b36'},
+    crosshair:{mode:0}, autoSize:true };
+
+  candleChart=LightweightCharts.createChart(document.getElementById('candle'),dark);
+  const cs=candleChart.addCandlestickSeries({upColor:'#3fb950',downColor:'#f85149',
+    borderUpColor:'#3fb950',borderDownColor:'#f85149',wickUpColor:'#3fb950',wickDownColor:'#f85149'});
+  cs.setData(candles); candleChart.timeScale().fitContent();
+
+  macdChart=LightweightCharts.createChart(document.getElementById('macd'),dark);
+  const hs=macdChart.addHistogramSeries({priceLineVisible:false,lastValueVisible:false}); hs.setData(hist);
+  const ml=macdChart.addLineSeries({color:'#58a6ff',lineWidth:1,priceLineVisible:false,lastValueVisible:false}); ml.setData(macdData);
+  const sl=macdChart.addLineSeries({color:'#f0a020',lineWidth:1,priceLineVisible:false,lastValueVisible:false}); sl.setData(sigData);
+  macdChart.timeScale().fitContent();
+
+  // 두 차트 시간축 동기화
+  let lock=false;
+  candleChart.timeScale().subscribeVisibleLogicalRangeChange(r=>{ if(lock||!r)return; lock=true; macdChart.timeScale().setVisibleLogicalRange(r); lock=false; });
+  macdChart.timeScale().subscribeVisibleLogicalRangeChange(r=>{ if(lock||!r)return; lock=true; candleChart.timeScale().setVisibleLogicalRange(r); lock=false; });
+}
+
+// ── 스크리너 ────────────────────────────────────────────
+function isCandidate(r){
+  return r.trend===CAND.trend && r.ma20_pct!=null && r.ma20_pct>=CAND.ma20Min && r.ma20_pct<=CAND.ma20Max
+    && r.rsi14!=null && r.rsi14>=CAND.rsiMin && r.rsi14<=CAND.rsiMax;
+}
+function candScore(r){ return (-(r.ma20_pct)) + (55 - r.rsi14); }
+function fmtPct(v){ if(v==null) return '<span class="mut">-</span>';
+  return `<span class="${v>0?'pos':(v<0?'neg':'mut')}">${v>0?'+':''}${v}%</span>`; }
+function trendBadge(t){ const c=t==='정배열↑'?'b-up':(t==='역배열↓'?'b-dn':'b-mid');
+  return `<span class="badge ${c}">${t||'-'}</span>`; }
+function rsiCell(v){ if(v==null) return '<span class="mut">-</span>';
+  return `<span class="${v<=30?'pos':(v>=70?'neg':'')}">${v}</span>`; }
+
+function rowHtml(r){
+  const sig = r._rank ? `<span class="badge b-rank">★ ${r._rank}위</span>` : '<span class="mut">-</span>';
+  const sn = (r.name??'').replace(/'/g,"\\'");
+  return `<tr class="${r._rank?'cand':''} ${r._sep?'sep':''}">
+    <td class="l"><span class="name cname" onclick="openChart('${r.ticker}','${sn}')">${r.name??''}</span> <span class="tk">${r.ticker}</span></td>
+    <td>${r.price!=null?Number(r.price).toLocaleString():'-'}</td>
+    <td>${fmtPct(r.hi52_pct)}</td>
+    <td>${fmtPct(r.ma20_pct)}</td>
+    <td>${fmtPct(r.ma60_pct)}</td>
+    <td class="l">${trendBadge(r.trend)}</td>
+    <td>${rsiCell(r.rsi14)}</td>
+    <td class="l">${sig}</td>
+    <td class="l"><button class="chart" onclick="openChart('${r.ticker}','${sn}')">차트</button></td>
+  </tr>`;
+}
+
+function render(){
+  const tb = document.getElementById('rows');
+  if(!DATA.length){ tb.innerHTML='<tr><td class="empty" colspan="9">데이터가 없습니다. (Update ETF 워크플로 실행 필요)</td></tr>';
+    document.getElementById('candCount').textContent='매수후보 0개'; return; }
+  const onlyCand = document.getElementById('onlyCand').checked;
+
+  let cands = DATA.filter(isCandidate).map(r=>({...r,_score:candScore(r)}));
+  cands.sort((a,b)=>b._score-a._score);
+  cands.forEach((r,i)=>{ r._rank=i+1; });
+  document.getElementById('candCount').textContent = `매수후보 ${cands.length}개`;
+
+  let others = onlyCand ? [] : DATA.filter(r=>!isCandidate(r)).map(r=>({...r}));
+  others.sort((a,b)=>{ let x=a[sortKey],y=b[sortKey];
+    if(x==null) return 1; if(y==null) return -1;
+    if(typeof x==='string') return sortAsc?x.localeCompare(y):y.localeCompare(x);
+    return sortAsc?x-y:y-x; });
+  if(others.length) others[0]._sep=true;
+
+  const list=[...cands,...others];
+  tb.innerHTML = list.map(rowHtml).join('');
+}
+
+window.sortBy = function(k){ if(sortKey===k){sortAsc=!sortAsc;}else{sortKey=k;sortAsc=true;} render(); };
+
+window.loadData = async function(){
+  const tb=document.getElementById('rows');
+  tb.innerHTML='<tr><td class="empty" colspan="9">불러오는 중…</td></tr>';
+  try{
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/etf_position?select=*&_=${Date.now()}`,
+      { cache:'no-store', headers:{ apikey:SUPABASE_ANON, Authorization:`Bearer ${SUPABASE_ANON}` } });
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    DATA=await res.json();
+    const t=DATA.reduce((m,r)=> r.updated_at>m ? r.updated_at : m, '');
+    document.getElementById('updated').textContent = t?'갱신: '+new Date(t).toLocaleString('ko-KR'):'';
+    render();
+  }catch(e){ tb.innerHTML=`<tr><td class="empty" colspan="9">불러오기 실패: ${e.message}</td></tr>`; }
+};
+
+loadData();
+</script>
+</body>
+</html>
