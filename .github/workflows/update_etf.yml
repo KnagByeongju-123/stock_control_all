@@ -14,12 +14,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install deps
-        run: pip install requests
+        run: pip install yfinance pandas requests
       - name: Run updater
         env:
           SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          KIS_APPKEY:           ${{ secrets.KIS_APPKEY }}
-          KIS_APPSECRET:        ${{ secrets.KIS_APPSECRET }}
-          KIS_REAL:             "true"
         run: python etf_updater.py
